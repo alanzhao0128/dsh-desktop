@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+  <title>DeepSeek Harness</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(88, 166, 255, 0.2);
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .title { font-size: 18px; font-weight: 600; letter-spacing: 0.2px; }
+    .detail { font-size: 13px; color: #8b949e; text-align: center; max-width: 480px; line-height: 1.6; }
+    .error { color: #ff7b72; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; max-width: 640px; max-height: 40vh; overflow: auto; padding: 12px; background: rgba(255, 123, 114, 0.06); border: 1px solid rgba(255, 123, 114, 0.25); border-radius: 8px; }
+    button {
+      padding: 8px 22px;
+      font-size: 13px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #e6edf3;
+      cursor: pointer;
+    }
+    button:hover { background: #30363d; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <div class="title">DeepSeek Harness</div>
+  <div class="detail" id="detail">正在启动 dsh web…</div>
+  <pre class="error hidden" id="error"></pre>
+  <button class="hidden" id="retry">重试</button>
+
+  <script>
+    document.title = 'DeepSeek Harness';
+    const detail = document.getElementById('detail');
+    const errorBox = document.getElementById('error');
+    const retryBtn = document.getElementById('retry');
+    const spinner = document.querySelector('.spinner');
+
+    function showError(message) {
+      spinner.classList.add('hidden');
+      detail.textContent = '启动失败';
+      errorBox.textContent = message;
+      errorBox.classList.remove('hidden');
+      retryBtn.classList.remove('hidden');
+    }
+
+    if (window.desktop) {
+      window.desktop.onStatus((status) => {
+        if (status.phase === 'error') {
+          showError(status.detail || '未知错误');
+        } else {
+          detail.textContent = status.detail || detail.textContent;
+        }
+      });
+      retryBtn.addEventListener('click', () => window.desktop.retry());
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.npm-cache/
+.npm-logs/
+.electron-cache/
+.electron-builder-cache/
+.smoke-dsh-home/
+.smoke-user-data/
+*.log
+.DS_Store
