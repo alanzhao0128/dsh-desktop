@@ -64,9 +64,10 @@ smoke 会真实执行一次「npx 拉最新包 → 启动 dsh web → 探活就�
 
 ## 平台支持
 
-当前面向 **macOS**。结构上已为 Windows 预留：
+当前面向 **macOS**（已发布）。Windows 支持已做好代码与图标预留，详细见 [Windows 构建与运行说明](docs/WINDOWS.md)：
 
 - `server-manager.js` 的进程启动/清理按平台分支（Windows 走 `cmd.exe /c` + `taskkill /T /F`）；
+- 已生成 `build/icon.ico`（16–256 多尺寸，与 mac 版同一设计）；
 - `electron-builder` 已配置 `win.nsis` 目标（在 Windows 机器上执行 `npx electron-builder --win` 即可出包，macOS 上无法交叉打包 Windows 安装包）。
 
 ## 已知限制
