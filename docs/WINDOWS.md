@@ -17,7 +17,7 @@ npm install
 npm start
 ```
 
-壳会执行 `npx --yes --prefer-online @deepseek-ai/dsh web` 并加载 `http://127.0.0.1:3080`。
+壳会执行 `npx --yes --prefer-online @deepseek-ai/dsh web --no-open` 并加载 `http://127.0.0.1:3080`（`--no-open` 阻止 dsh 额外打开默认浏览器）。
 
 ## 打包 Windows 安装包
 

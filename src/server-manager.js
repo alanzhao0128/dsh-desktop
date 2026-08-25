@@ -63,6 +63,8 @@ function probe(port, timeoutMs = 2000) {
  * The command string keeps the user's own command: `npx @deepseek-ai/dsh web`.
  * `--yes` keeps npx non-interactive; `--prefer-online` forces npx to consult
  * the registry every launch so the latest published version is used.
+ * `--no-open` stops dsh web from opening the default browser: the shell
+ * renders the UI in its embedded window, so a second browser tab is unwanted.
  * A non-default port is forwarded as `--port N`, which the dsh web app itself
  * understands (launcher flags come first, the rest belongs to the app).
  */
@@ -75,7 +77,9 @@ function shellCommand(command) {
 }
 
 function buildDshCommand(port) {
-  const base = 'npx --yes --prefer-online @deepseek-ai/dsh web';
+  // `--no-open` stops dsh web from opening the default browser — the shell
+  // renders the UI in its embedded window, so a browser tab is unwanted.
+  const base = 'npx --yes --prefer-online @deepseek-ai/dsh web --no-open';
   return port === DEFAULT_PORT ? base : `${base} --port ${port}`;
 }
 

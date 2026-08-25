@@ -4,7 +4,7 @@
 
 ## 特性
 
-- **每次启动都从 npx 拉取最新版本**：内部执行 `npx --yes --prefer-online @deepseek-ai/dsh web`（`--yes` 避免交互卡住，`--prefer-online` 强制每次联网校验 registry，取最新发布版；核心命令就是 `npx @deepseek-ai/dsh web` 不变）。
+- **每次启动都从 npx 拉取最新版本**：内部执行 `npx --yes --prefer-online @deepseek-ai/dsh web --no-open`（`--yes` 避免交互卡住，`--prefer-online` 强制每次联网校验 registry，取最新发布版；`--no-open` 让 dsh 不额外弹出系统浏览器——UI 由壳内嵌窗口渲染；核心命令仍是 `npx @deepseek-ai/dsh web`）。
 - **智能复用**：如果 `3080` 端口已经有 dsh web 在跑（比如浏览器里已经开着一个），壳直接复用，不会重复启动；只有端口空闲时才自己拉起一个。
 - **macOS 惯例的窗口行为**：点窗口的 ✕ 只关窗口，app 进程和 dsh web 服务都继续运行（Dock 里还在，点图标重新开窗会直接复用仍在跑的服务）；**Cmd+Q**（或菜单退出）才真正退出 app，并只杀掉**自己拉起**的 dsh 进程树；复用的外部实例保持不动。Windows/Linux 上保持"关窗口即退出"的惯例。
 - **启动过程可见**：npx 首次下载可能较慢，窗口内显示进度；失败时显示原因和日志路径，可一键重试。
