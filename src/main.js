@@ -133,14 +133,18 @@ async function boot(port) {
   dshChild = await startDsh({
     port,
     env,
-    onLog: (line) => dshLogger.info(line),
+    onLog: (line) => {
+      dshLogger.info(line);
+      sendStatus('log', line); // stream npx/dsh output to the shell window
+    },
   });
   managed = true;
 
   const result = await waitUntilReady(port, {
-    timeoutMs: 300000, // npx may download the latest package on first launch
+    timeoutMs: 600000, // npx may download a new dsh release; keep waiting while it runs
+    child: dshChild,
     onAttempt: (attempt) => {
-      sendStatus('waiting', `正在等待 dsh web 就绪…（第 ${attempt} 次探测）`);
+      sendStatus('waiting', `正在等待 dsh web 就绪…（第 ${attempt} 次探测，下方为实时日志）`);
     },
   });
 
@@ -156,10 +160,20 @@ async function boot(port) {
     booting = false;
     return;
   }
+  if (result.reason === 'exited') {
+    const msg =
+      `dsh 进程提前退出（exit code: ${result.exitCode ?? 'signal'}），未能启动。\n` +
+      `通常是网络问题（npx 无法下载）或 dsh 启动报错。\n` +
+      `下方为最后输出，完整日志：${dshLogger.file}`;
+    logger.error(msg);
+    sendStatus('error', msg);
+    booting = false;
+    return;
+  }
 
   const msg =
     `等待 dsh web 启动超时（${result.attempts} 次探测后仍未就绪）。\n` +
-    `请查看日志文件了解原因：\n${dshLogger.file}`;
+    `进程仍在运行但迟迟未就绪，请查看下方日志与文件：\n${dshLogger.file}`;
   logger.error(msg);
   sendStatus('error', msg);
   booting = false;

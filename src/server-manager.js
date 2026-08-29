@@ -132,7 +132,10 @@ async function startDsh({ port = DEFAULT_PORT, onLog, env = {} } = {}) {
   });
   const sink = (streamName) => (chunk) => {
     const text = chunk.toString();
-    for (const line of text.split(/\r?\n/)) {
+    // Split on newlines AND carriage returns: npx download progress redraws
+    // the same line with \r, so each redraw becomes one log entry instead
+    // of one giant blob.
+    for (const line of text.split(/\r?\n|\r/)) {
       if (line.length > 0 && onLog) onLog(`[dsh] ${line}`);
     }
   };
@@ -149,12 +152,21 @@ async function startDsh({ port = DEFAULT_PORT, onLog, env = {} } = {}) {
 
 /**
  * Poll until the dsh web fingerprint answers on `port`.
- * @returns {Promise<{ok: boolean, reason?: 'timeout'|'occupied', attempts: number}>}
+ * If `child` is given, the poll aborts as soon as the process exits
+ * (e.g. npx failed to download) instead of waiting out the timeout —
+ * a dead process will never become ready.
+ * @param {import('child_process').ChildProcess} [child]  spawned dsh process (optional)
+ * @returns {Promise<{ok: boolean, reason?: 'timeout'|'occupied'|'exited', exitCode?: number|null, attempts: number}>}
  */
-async function waitUntilReady(port, { timeoutMs = 240000, intervalMs = 800, onAttempt } = {}) {
+async function waitUntilReady(port, { timeoutMs = 600000, intervalMs = 800, onAttempt, child } = {}) {
   const deadline = Date.now() + timeoutMs;
   let attempts = 0;
   while (Date.now() < deadline) {
+    // The spawned process died before becoming ready (npx failed, package
+    // missing, ...): bail out immediately, do not make the user wait.
+    if (child && (child.exitCode !== null || child.signalCode !== null)) {
+      return { ok: false, reason: 'exited', exitCode: child.exitCode, attempts };
+    }
     attempts += 1;
     const state = await probe(port);
     if (state === 'dsh') return { ok: true, attempts };

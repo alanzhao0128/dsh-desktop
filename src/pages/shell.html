@@ -33,6 +33,25 @@
     .title { font-size: 18px; font-weight: 600; letter-spacing: 0.2px; }
     .detail { font-size: 13px; color: #8b949e; text-align: center; max-width: 480px; line-height: 1.6; }
     .error { color: #ff7b72; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; max-width: 640px; max-height: 40vh; overflow: auto; padding: 12px; background: rgba(255, 123, 114, 0.06); border: 1px solid rgba(255, 123, 114, 0.25); border-radius: 8px; }
+    .log {
+      width: 100%;
+      max-width: 720px;
+      max-height: 45vh;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #8b949e;
+      background: rgba(13, 17, 23, 0.8);
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 10px 12px;
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-all;
+      display: none;
+    }
+    .log.visible { display: block; }
     button {
       padding: 8px 22px;
       font-size: 13px;
@@ -50,15 +69,28 @@
   <div class="spinner"></div>
   <div class="title">DeepSeek Harness</div>
   <div class="detail" id="detail">正在启动 dsh web…</div>
+  <pre class="log" id="log"></pre>
   <pre class="error hidden" id="error"></pre>
   <button class="hidden" id="retry">重试</button>
 
   <script>
     document.title = 'DeepSeek Harness';
     const detail = document.getElementById('detail');
+    const logBox = document.getElementById('log');
     const errorBox = document.getElementById('error');
     const retryBtn = document.getElementById('retry');
     const spinner = document.querySelector('.spinner');
+
+    function appendLog(line) {
+      logBox.classList.add('visible');
+      logBox.textContent += line + '\n';
+      // keep the tail only, so a long npx download does not grow unbounded
+      const lines = logBox.textContent.split('\n');
+      if (lines.length > 300) {
+        logBox.textContent = lines.slice(lines.length - 300).join('\n');
+      }
+      logBox.scrollTop = logBox.scrollHeight;
+    }
 
     function showError(message) {
       spinner.classList.add('hidden');
@@ -72,6 +104,8 @@
       window.desktop.onStatus((status) => {
         if (status.phase === 'error') {
           showError(status.detail || '未知错误');
+        } else if (status.phase === 'log') {
+          appendLog(status.detail || '');
         } else {
           detail.textContent = status.detail || detail.textContent;
         }
