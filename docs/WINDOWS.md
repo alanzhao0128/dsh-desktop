@@ -17,7 +17,7 @@ npm install
 npm start
 ```
 
-壳会执行 `npx --yes --prefer-online @deepseek-ai/dsh web --no-open` 并加载 `http://127.0.0.1:3080`（`--no-open` 阻止 dsh 额外打开默认浏览器）。
+壳会优先使用已全局安装的 `dsh`（`dsh web --no-open`），否则回退 `npx --yes --prefer-online @deepseek-ai/dsh web --no-open`，并加载 `http://127.0.0.1:3080`（`--no-open` 阻止 dsh 额外打开默认浏览器）。
 
 ## 打包 Windows 安装包
 
@@ -36,7 +36,7 @@ npx electron-builder --win
 
 ## Windows 特有行为说明
 
-- **进程启动**：`server-manager.js` 通过 `cmd.exe /d /s /c "npx ..."` 启动；`npx.cmd` 由 cmd 从 PATH 解析。
+- **进程启动**：`server-manager.js` 通过 `cmd.exe /d /s /c "dsh web --no-open"`（或回退 `"npx ..."`）启动；`dsh`/`npx.cmd` 由 cmd 从 PATH 解析。
 - **进程清理**：关闭壳时用 `taskkill /pid <pid> /T /F` 杀掉整个进程树（含 dsh 派生的子进程）。
 - **复用逻辑与 mac 一致**：只探测 `127.0.0.1:3080` 是否有 dsh web 指纹，**不区分版本**；手动跑在 3080 的 dsh（任何版本）会被直接复用。
 - **日志路径**：`%APPDATA%\dsh-desktop\logs\`（`shell.log` + `dsh.log`），帮助菜单可打开。

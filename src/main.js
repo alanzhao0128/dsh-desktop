@@ -124,13 +124,13 @@ async function boot(port) {
     return;
   }
 
-  logger.info(`port ${port}: no dsh web, spawning: ${process.env.SHELL || 'sh'} -lc 'npx @deepseek-ai/dsh web'`);
-  sendStatus('spawning', '正在通过 npx 启动 dsh web（首次会下载最新版本，请稍候）…');
+  logger.info(`port ${port}: no dsh web, spawning dsh (global dsh if installed, else npx)`);
+  sendStatus('spawning', '正在启动 dsh web（已全局安装则直接用 dsh，否则通过 npx 拉取最新版）…');
 
   const env = {};
   if (process.env.DSH_NPM_CACHE) env.npm_config_cache = process.env.DSH_NPM_CACHE;
 
-  dshChild = startDsh({
+  dshChild = await startDsh({
     port,
     env,
     onLog: (line) => dshLogger.info(line),

@@ -8,9 +8,10 @@
  *
  *   - probe(port): detect whether a dsh web instance is already listening
  *     (fingerprint: /manifest.webmanifest contains "DeepSeek Harness")
- *   - startDsh(port): spawn `npx @deepseek-ai/dsh web` through the user's
- *     login shell so PATH (nvm, homebrew, ...) resolves; detached so the
- *     whole process group can be reaped on quit
+ *   - startDsh(port): spawn `dsh web` (global install) — or fall back to
+ *     `npx @deepseek-ai/dsh web` — through the user's login shell so PATH
+ *     (nvm, homebrew, ...) resolves; detached so the whole process group
+ *     can be reaped on quit
  *   - waitUntilReady(port): poll until the fingerprint appears
  *   - stopDsh(child): terminate the spawned process tree
  */
@@ -60,9 +61,8 @@ function probe(port, timeoutMs = 2000) {
 
 /**
  * Build the shell invocation that runs the dsh web command.
- * The command string keeps the user's own command: `npx @deepseek-ai/dsh web`.
- * `--yes` keeps npx non-interactive; `--prefer-online` forces npx to consult
- * the registry every launch so the latest published version is used.
+ * If `dsh` is installed globally (npm i -g @deepseek-ai/dsh), run it directly;
+ * otherwise fall back to `npx --yes --prefer-online @deepseek-ai/dsh web`.
  * `--no-open` stops dsh web from opening the default browser: the shell
  * renders the UI in its embedded window, so a second browser tab is unwanted.
  * A non-default port is forwarded as `--port N`, which the dsh web app itself
@@ -76,10 +76,40 @@ function shellCommand(command) {
   return { file: shell, args: ['-lc', command] };
 }
 
-function buildDshCommand(port) {
+/**
+ * Check whether a global `dsh` binary is reachable on PATH.
+ * Runs `command -v dsh` (POSIX) / `where dsh` (Windows) through the same
+ * login shell the spawn uses, so nvm/homebrew-style PATH setups apply.
+ * @returns {Promise<boolean>}
+ */
+function hasGlobalDsh() {
+  return new Promise((resolve) => {
+    const cmd = process.platform === 'win32' ? 'where dsh' : 'command -v dsh';
+    const { file, args } = shellCommand(cmd);
+    const child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (c) => {
+      out += c.toString();
+    });
+    child.on('error', () => resolve(false));
+    child.on('close', (code) => {
+      resolve(code === 0 && out.trim().length > 0);
+    });
+  });
+}
+
+/**
+ * Decide the command line used to launch dsh web on `port`.
+ * Prefers a globally installed `dsh`; falls back to npx for everyone else.
+ * @returns {Promise<string>}
+ */
+async function buildDshCommand(port) {
+  const globalDsh = await hasGlobalDsh();
   // `--no-open` stops dsh web from opening the default browser — the shell
   // renders the UI in its embedded window, so a browser tab is unwanted.
-  const base = 'npx --yes --prefer-online @deepseek-ai/dsh web --no-open';
+  const base = globalDsh
+    ? 'dsh web --no-open'
+    : 'npx --yes --prefer-online @deepseek-ai/dsh web --no-open';
   return port === DEFAULT_PORT ? base : `${base} --port ${port}`;
 }
 
@@ -89,10 +119,12 @@ function buildDshCommand(port) {
  * @param {number} [options.port]
  * @param {(line: string) => void} [options.onLog]  dsh stdout/stderr line sink
  * @param {object} [options.env]  extra environment for the child (merged over process.env)
- * @returns {import('child_process').ChildProcess}
+ * @returns {Promise<import('child_process').ChildProcess>}
  */
-function startDsh({ port = DEFAULT_PORT, onLog, env = {} } = {}) {
-  const { file, args } = shellCommand(buildDshCommand(port));
+async function startDsh({ port = DEFAULT_PORT, onLog, env = {} } = {}) {
+  const command = await buildDshCommand(port);
+  if (onLog) onLog(`[dsh] launch: ${command}`);
+  const { file, args } = shellCommand(command);
   const child = spawn(file, args, {
     detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -183,6 +215,7 @@ module.exports = {
   DEFAULT_PORT,
   FINGERPRINT,
   probe,
+  hasGlobalDsh,
   startDsh,
   stopDsh,
   waitUntilReady,

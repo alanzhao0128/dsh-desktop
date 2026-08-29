@@ -59,7 +59,7 @@ async function main() {
   console.log(`\n[spawn] starting dsh web on port ${scratchPort} ...`);
   console.log(`[spawn] scratch DSH_HOME: ${SCRATCH_HOME}`);
   const lines = [];
-  const child = startDsh({
+  const child = await startDsh({
     port: scratchPort,
     env: {
       DSH_HOME: SCRATCH_HOME,
