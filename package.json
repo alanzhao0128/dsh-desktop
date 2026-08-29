@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop",
   "productName": "DeepSeek Harness Desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Native desktop shell for DeepSeek Harness: spawns `npx @deepseek-ai/dsh web` and embeds http://127.0.0.1:3080 in an Electron window.",
   "author": "dsh-desktop contributors",
   "main": "src/main.js",
