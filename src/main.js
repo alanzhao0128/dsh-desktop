@@ -19,6 +19,7 @@ const fs = require('fs');
 const {
   DEFAULT_PORT,
   probe,
+  probeIndexAuth,
   startDsh,
   stopDsh,
   waitUntilReady,
@@ -34,6 +35,7 @@ let booting = false;
 let quitting = false;
 let logger = null;
 let dshLogger = null;
+let launchUrl = null; // authenticated dsh web URL parsed from the spawn log
 
 function sendStatus(phase, detail) {
   if (win && !win.isDestroyed()) {
@@ -45,6 +47,29 @@ function portFromEnv() {
   const raw = process.env.DSH_DESKTOP_PORT;
   const n = raw ? Number.parseInt(raw, 10) : NaN;
   return Number.isInteger(n) && n > 0 && n < 65536 ? n : DEFAULT_PORT;
+}
+
+/**
+ * Parse the authenticated web URL out of one dsh stdout line.
+ * dsh prints `dsh web: http://127.0.0.1:<port>/?token=<43 chars>` (plus an
+ * optional `(LAN: ...)` suffix). Only a loopback URL on the exact port we
+ * spawned counts — a LAN/SSH URL is not this window's address.
+ * @param {string} line  raw stdout line from the spawned dsh
+ * @param {number} port  the port this shell manages
+ * @returns {string|null} the authenticated URL, or null when the line is not it
+ */
+function parseLaunchUrl(line, port) {
+  const m = line.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  try {
+    const url = new URL(m[1]);
+    if (url.hostname === '127.0.0.1' && Number(url.port) === port && url.searchParams.get('token')) {
+      return url.href;
+    }
+  } catch {
+    /* not a URL we can use */
+  }
+  return null;
 }
 
 function isLocalUrl(url) {
@@ -107,13 +132,29 @@ function createWindow() {
 async function boot(port) {
   if (booting) return;
   booting = true;
+  launchUrl = null;
   sendStatus('starting', '正在检测 dsh web 服务…');
 
   const state = await probe(port);
   if (state === 'dsh') {
     logger.info(`port ${port}: existing dsh web found, reusing (external, not managed)`);
     managed = false;
-    loadApp(port);
+    // Since dsh 0.1.2-alpha.1 the index is guarded by a per-process launch
+    // token we cannot obtain for an externally started instance. An older
+    // dsh (index answers 200) can still be reused directly.
+    const indexAuth = await probeIndexAuth(port);
+    if (indexAuth === 'auth') {
+      const msg =
+        `检测到正在运行的 dsh web 需要浏览器鉴权（dsh ≥ 0.1.2），\n` +
+        `但它不是本壳启动的，本壳拿不到它的启动令牌。\n\n` +
+        `请退出正在运行的 dsh web，然后重试（本壳会自己启动一个并完成鉴权）；\n` +
+        `或在终端用 dsh 打印的带 token 地址在浏览器中打开。`;
+      logger.error(msg);
+      sendStatus('error', msg);
+      booting = false;
+      return;
+    }
+    loadApp(port, `http://127.0.0.1:${port}`);
     return;
   }
   if (state === 'other') {
@@ -135,6 +176,9 @@ async function boot(port) {
     env,
     onLog: (line) => {
       dshLogger.info(line);
+      // Catch the authenticated URL the moment dsh prints it (dsh ≥ 0.1.2).
+      const url = parseLaunchUrl(line, port);
+      if (url) launchUrl = url;
       sendStatus('log', line); // stream npx/dsh output to the shell window
     },
   });
@@ -150,7 +194,13 @@ async function boot(port) {
 
   if (result.ok) {
     logger.info(`port ${port}: dsh web ready after ${result.attempts} probes`);
-    loadApp(port);
+    const url = await waitForLaunchUrl(port);
+    if (booting === false) return; // waitForLaunchUrl reported an auth error
+    if (url) {
+      loadApp(port, url); // dsh ≥ 0.1.2: launch-token URL
+    } else {
+      loadApp(port, `http://127.0.0.1:${port}`); // older dsh without auth
+    }
     return;
   }
   if (result.reason === 'occupied') {
@@ -179,12 +229,39 @@ async function boot(port) {
   booting = false;
 }
 
-function loadApp(port) {
-  const url = `http://127.0.0.1:${port}`;
-  logger.info(`loading ${url}`);
-  sendStatus('ready', `正在打开 ${url}`);
+/**
+ * Wait briefly for the authenticated launch URL that dsh ≥ 0.1.2 prints
+ * after its Loader tree settles. The manifest probe can go green a moment
+ * before that line appears, so give it a short grace window.
+ * @param {number} port
+ * @returns {Promise<string|null>} authenticated URL when found, else null
+ */
+async function waitForLaunchUrl(port) {
+  const deadline = Date.now() + 5000;
+  while (!launchUrl && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  if (launchUrl) return launchUrl;
+  // No token line: either an older dsh without auth, or a newer one that
+  // failed to print (should not happen). Distinguish via the index probe.
+  const indexAuth = await probeIndexAuth(port);
+  if (indexAuth === 'auth') {
+    logger.error(`port ${port}: dsh is ready but its launch-token URL was not captured from the log`);
+    sendStatus('error',
+      `dsh web 已就绪，但未能在其输出中找到带 token 的启动地址。\n` +
+      `请查看日志文件：\n${dshLogger.file}`);
+    booting = false;
+    return null;
+  }
+  return null; // older dsh (no auth): caller falls back to the bare URL
+}
+
+function loadApp(port, url) {
+  const target = url || `http://127.0.0.1:${port}`;
+  logger.info(`loading ${target}`);
+  sendStatus('ready', `正在打开 ${target}`);
   if (win && !win.isDestroyed()) {
-    win.loadURL(url);
+    win.loadURL(target);
     if (process.env.DSH_DESKTOP_AUTOCLOSE) {
       win.webContents.once('did-finish-load', () => {
         logger.info('AUTOCLOSE: app page loaded, quitting');

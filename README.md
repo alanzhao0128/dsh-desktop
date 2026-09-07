@@ -6,6 +6,7 @@
 
 - **优先全局 dsh，否则 npx**：若已全局安装 dsh（`npm i -g @deepseek-ai/dsh`），直接用 `dsh web --no-open` 启动；未安装时回退 `npx --yes --prefer-online @deepseek-ai/dsh web --no-open`（`--yes` 避免交互卡住，`--prefer-online` 强制每次联网校验 registry 取最新发布版）。`--no-open` 让 dsh 不额外弹出系统浏览器——UI 由壳内嵌窗口渲染。
 - **智能复用**：如果 `3080` 端口已经有 dsh web 在跑（比如浏览器里已经开着一个），壳直接复用，不会重复启动；只有端口空闲时才自己拉起一个。
+- **自动适配 dsh ≥ 0.1.2 浏览器鉴权**：新版 dsh web 用「启动令牌 → 签名 cookie」保护页面。壳从 dsh 的输出中捕获带 token 的启动地址并用它加载窗口，自动完成令牌换 cookie，无需手动操作。对**外部已运行的**新版 dsh（非本壳启动，拿不到令牌），壳会提示先退出它再让本壳启动。
 - **macOS 惯例的窗口行为**：点窗口的 ✕ 只关窗口，app 进程和 dsh web 服务都继续运行（Dock 里还在，点图标重新开窗会直接复用仍在跑的服务）；**Cmd+Q**（或菜单退出）才真正退出 app，并只杀掉**自己拉起**的 dsh 进程树；复用的外部实例保持不动。Windows/Linux 上保持"关窗口即退出"的惯例。
 - **启动过程可见**：npx 首次下载可能较慢，窗口内显示进度；失败时显示原因和日志路径，可一键重试。
 - **日志**：写到 `~/Library/Application Support/dsh-desktop/logs/`（shell.log + dsh.log），帮助菜单可直接打开日志目录。

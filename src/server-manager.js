@@ -60,6 +60,33 @@ function probe(port, timeoutMs = 2000) {
 }
 
 /**
+ * Ask whether the dsh web index page requires browser authentication.
+ * Since dsh 0.1.2-alpha.1 the web UI guards `/` behind a per-process launch
+ * token exchanged for a signed cookie (`/manifest.webmanifest` and other
+ * static assets stay public, so `probe()` keeps working unchanged).
+ * @param {number} port
+ * @returns {Promise<'open'|'auth'|'down'>}
+ *   'open'  — `/` answers 200 without credentials (older dsh, no auth)
+ *   'auth'  — `/` answers 401, this dsh needs a launch-token URL
+ *   'down'  — nothing reachable
+ */
+function probeIndexAuth(port, timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: timeoutMs }, (res) => {
+      res.resume(); // discard body, we only need the status
+      if (res.statusCode === 200) resolve('open');
+      else if (res.statusCode === 401) resolve('auth');
+      else resolve('other');
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve('down');
+    });
+    req.on('error', () => resolve('down'));
+  });
+}
+
+/**
  * Build the shell invocation that runs the dsh web command.
  * If `dsh` is installed globally (npm i -g @deepseek-ai/dsh), run it directly;
  * otherwise fall back to `npx --yes --prefer-online @deepseek-ai/dsh web`.
@@ -163,14 +190,21 @@ async function waitUntilReady(port, { timeoutMs = 600000, intervalMs = 800, onAt
   let attempts = 0;
   while (Date.now() < deadline) {
     // The spawned process died before becoming ready (npx failed, package
-    // missing, ...): bail out immediately, do not make the user wait.
+    // missing, port conflict, ...): bail out immediately, do not make the
+    // user wait.
     if (child && (child.exitCode !== null || child.signalCode !== null)) {
       return { ok: false, reason: 'exited', exitCode: child.exitCode, attempts };
     }
     attempts += 1;
     const state = await probe(port);
     if (state === 'dsh') return { ok: true, attempts };
-    if (state === 'other') return { ok: false, reason: 'occupied', attempts };
+    if (state === 'other') {
+      // A spawned process still starting up can answer briefly with a
+      // not-yet-dsh response (webserver bound, dist/routes still mounting):
+      // that is a transient 'other', not an occupied port. Only a caller
+      // with no child (pure probe) treats 'other' as immediately occupied.
+      if (!child) return { ok: false, reason: 'occupied', attempts };
+    }
     if (onAttempt) onAttempt(attempts, state);
     await sleep(intervalMs);
   }
@@ -227,6 +261,7 @@ module.exports = {
   DEFAULT_PORT,
   FINGERPRINT,
   probe,
+  probeIndexAuth,
   hasGlobalDsh,
   startDsh,
   stopDsh,
